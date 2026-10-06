@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>投資記録</title>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic&family=M+PLUS+Rounded+1c&display=swap" rel="stylesheet">  <title>投資記録</title>
   <style>
   body {
-    font-family: sans-serif;
+    font-family: "M PLUS Rounded 1c", sans-serif;
     max-width: 480px;
     margin: 0 auto;
     padding: 16px;
-    background: #f5f5f5;
+    background: #a1cfdb;;
   }
 
   h1 {
@@ -25,14 +25,19 @@
     box-sizing: border-box;
     font-size: 1rem;
   }
-
+  label {
+  display: block;
+  font-size: 0.85rem;
+  color: #555;
+  margin-top: 8px;
+  }
   button {
     padding: 8px 14px;
     font-size: 1rem;
     border: none;
     border-radius: 6px;
-    background: #2a7f62;
-    color: white;
+    background: #467e8f;
+    color: rgb(255, 255, 255);
   }
 
   ul {
@@ -56,6 +61,46 @@
     border-radius: 6px;
     font-weight: bold;
   }
+
+  .calHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .calGrid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    text-align: center;
+  }
+
+  .calDay {
+    padding: 8px 0;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .calDay.hasRecord {
+    background: #d7f0e3;
+    font-weight: bold;
+  }
+
+  #calendar {
+    background: #eee;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+  }
+
+  #dayDetail {
+    background: white;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+  }
 </style>
 </head>
 <body>
@@ -63,10 +108,17 @@
   <label><input type="radio" name="side" value="buy" checked> 買い</label>
   <label><input type="radio" name="side" value="sell"> 売り</label>
   <input id="name" placeholder="銘柄名">
+  <label for="qty">数量</label>
   <input id="qty" type="number" placeholder="数量">
+  <label for="price">単価(円)</label>
   <input id="price" type="number" placeholder="単価">
+  <label for="date">日付</label>
+  <input id="date" type="date">
   <button id="add">記録する</button>
   <ul id="list"></ul>
+  <button id="calendarToggle">📅 カレンダー</button>
+  <div id="calendar" style="display:none;"></div>
+  <div id="dayDetail"></div>
   <h2>合計</h2>
   <p id="summary"></p>
   <h2>保有</h2>
@@ -76,6 +128,8 @@
   <script>
   // 保存済みのデータを読み込む(なければ空の配列)
   let records = JSON.parse(localStorage.getItem("records") || "[]");
+  let calendarMonth = new Date();
+  let showAllHistory = false;
   let prices = JSON.parse(localStorage.getItem("prices") || "{}");
 
   // 記録を画面に表示する
@@ -117,8 +171,10 @@
     }
     const totalPl = totalValue - totalCost;
     document.getElementById("summary").textContent =
-    "投資額 " + Math.round(totalCost) + "円 / 評価額 " + Math.round(totalValue) + "円 / 評価損益 " + Math.round(totalPl) + "円 / 実現損益 " + Math.round(realizedPl) + "円";
-    records.forEach(function (r) {
+    "投資額 " + Math.round(totalCost) + "円  /  評価額 " + Math.round(totalValue) + "円  /  評価損益 " + Math.round(totalPl) + "円  /  実現損益 " + Math.round(realizedPl) + "円";
+    const sortedRecords = records.slice().reverse();
+    const visibleRecords = showAllHistory ? sortedRecords : sortedRecords.slice(0, 3);
+    visibleRecords.forEach(function (r) {
       const li = document.createElement("li");
       let sideLabel;
       if (r.side === "buy") {
@@ -140,7 +196,20 @@
       li.appendChild(delBtn);
       list.appendChild(li);
     });
+    if (sortedRecords.length > 3) {
+      const moreBtn = document.createElement("button");
+      moreBtn.textContent = showAllHistory ? "少なく表示" : "もっと見る (" + (sortedRecords.length - 3) + "件)";
+      moreBtn.style.display = "block";
+      moreBtn.style.marginLeft = "auto";
+      moreBtn.onclick = function () {
+        showAllHistory = !showAllHistory;
+        render();
+      };
+      list.appendChild(moreBtn);
+    }
   }
+  
+  
   function calculateHoldings() {
     const holdings = {};
     let realizedPl = 0; // 確定した損益の合計
@@ -164,6 +233,83 @@
 
     return { holdings: holdings, realizedPl: realizedPl };
   }
+  
+  
+  function renderCalendar() {
+  const cal = document.getElementById("calendar");
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth(); // 0〜11(0が1月)
+
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0); // 翌月の0日目 = この月の最終日
+  const startWeekday = firstDay.getDay(); // 0(日)〜6(土)
+
+  // その月に取引がある日付を集める(例: "2026-10-05")
+  const datesWithRecords = {};
+  records.forEach(function (r) {
+    datesWithRecords[r.date] = true;
+  });
+
+  let html = "";
+  html += '<div class="calHeader">';
+  html += '<button id="prevMonth">←</button>';
+  html += '<span>' + year + '年' + (month + 1) + '月</span>';
+  html += '<button id="nextMonth">→</button>';
+  html += '</div>';
+  html += '<div class="calGrid">';
+
+  // 月の1日の前にある空白を埋める
+  for (let i = 0; i < startWeekday; i++) {
+    html += '<div></div>';
+  }
+
+  // 1日から月末まで並べる
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const dateStr = year + "-" + String(month + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+    const hasRecord = datesWithRecords[dateStr] ? "hasRecord" : "";
+    html += '<div class="calDay ' + hasRecord + '" data-date="' + dateStr + '">' + d + '</div>';
+  }
+
+  html += '</div>';
+  cal.innerHTML = html;
+
+  document.getElementById("prevMonth").onclick = function () {
+    calendarMonth.setMonth(calendarMonth.getMonth() - 1);
+    renderCalendar();
+  };
+  document.getElementById("nextMonth").onclick = function () {
+    calendarMonth.setMonth(calendarMonth.getMonth() + 1);
+    renderCalendar();
+  };
+
+  document.querySelectorAll(".calDay").forEach(function (el) {
+    el.onclick = function () {
+      showDayDetail(el.dataset.date);
+    };
+  });
+  }
+
+
+  function showDayDetail(dateStr) {
+  const dayRecords = records.filter(function (r) {
+    return r.date === dateStr;
+  });
+
+  const detail = document.getElementById("dayDetail");
+
+  if (dayRecords.length === 0) {
+    detail.innerHTML = "<p>" + dateStr + " の取引はありません。</p>";
+    return;
+  }
+
+  let html = "<h3>" + dateStr + " の取引</h3><ul>";
+  dayRecords.forEach(function (r) {
+    const sideLabel = r.side === "buy" ? "買い" : "売り";
+    html += "<li>" + sideLabel + " " + r.name + " " + r.qty + "株 @" + r.price + "円</li>";
+  });
+  html += "</ul>";
+  detail.innerHTML = html;
+  }
 
   // 「記録する」ボタンを押したとき
   document.getElementById("add").onclick = function () {
@@ -172,12 +318,24 @@
     side: document.querySelector('input[name="side"]:checked').value,
     name: document.getElementById("name").value,
     qty: Number(document.getElementById("qty").value),
-    price: Number(document.getElementById("price").value)
+    price: Number(document.getElementById("price").value),
+    date: document.getElementById("date").value
   });
     localStorage.setItem("records", JSON.stringify(records)); // 保存
     render();
   };
-
+  
+  document.getElementById("date").valueAsDate = new Date();
+  
+  document.getElementById("calendarToggle").onclick = function () {
+  const cal = document.getElementById("calendar");
+  if (cal.style.display === "none") {
+    cal.style.display = "block";
+    renderCalendar();
+  } else {
+    cal.style.display = "none";
+  }
+  };
   render(); // ページを開いたときにも表示する
 </script>
 </body>
