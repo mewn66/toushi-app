@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>投資記録</title>
+  <style>
+  body {
+    font-family: sans-serif;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px;
+    background: #f5f5f5;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+  }
+
+  input[type="text"],
+  input[type="number"] {
+    width: 100%;
+    padding: 8px;
+    margin: 4px 0;
+    box-sizing: border-box;
+    font-size: 1rem;
+  }
+
+  button {
+    padding: 8px 14px;
+    font-size: 1rem;
+    border: none;
+    border-radius: 6px;
+    background: #2a7f62;
+    color: white;
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  li {
+    background: white;
+    padding: 10px;
+    margin-bottom: 6px;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  #summary {
+    background: white;
+    padding: 10px;
+    border-radius: 6px;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+  <h1>投資記録</h1>
+  <label><input type="radio" name="side" value="buy" checked> 買い</label>
+  <label><input type="radio" name="side" value="sell"> 売り</label>
+  <input id="name" placeholder="銘柄名">
+  <input id="qty" type="number" placeholder="数量">
+  <input id="price" type="number" placeholder="単価">
+  <button id="add">記録する</button>
+  <ul id="list"></ul>
+  <h2>合計</h2>
+  <p id="summary"></p>
+  <h2>保有</h2>
+  <ul id="holdings"></ul>
+  <ul id="holdings"></ul>
+
+  <script>
+  // 保存済みのデータを読み込む(なければ空の配列)
+  let records = JSON.parse(localStorage.getItem("records") || "[]");
+  let prices = JSON.parse(localStorage.getItem("prices") || "{}");
+
+  // 記録を画面に表示する
+  function render() {
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+    const result = calculateHoldings();
+    const holdings = result.holdings;
+    const realizedPl = result.realizedPl;
+    const holdingsList = document.getElementById("holdings");
+    holdingsList.innerHTML = "";
+    let totalCost = 0;
+    let totalValue = 0;
+    for (const name in holdings) {
+      const h = holdings[name];
+      if (h.qty > 0) {
+        const avgPrice = Math.round(h.cost / h.qty);
+        const price = prices[name] || avgPrice; // 現在値が未入力なら平均単価を仮表示
+        const value = price * h.qty;
+        const pl = value - h.cost;
+        totalCost += h.cost;
+        totalValue += value;
+
+        const li = document.createElement("li");
+        li.textContent = name + ": " + h.qty + "株 (平均 " + avgPrice + "円) 評価額 " + value + "円 損益 " + pl + "円 ";
+        const priceInput = document.createElement("input");
+        priceInput.type = "number";
+        priceInput.placeholder = "現在値";
+        priceInput.value = prices[name] || "";
+        priceInput.onchange = function () {
+          prices[name] = Number(priceInput.value);
+          localStorage.setItem("prices", JSON.stringify(prices));
+          render();
+        };
+
+        li.appendChild(priceInput);
+        holdingsList.appendChild(li);
+      }
+    }
+    const totalPl = totalValue - totalCost;
+    document.getElementById("summary").textContent =
+    "投資額 " + Math.round(totalCost) + "円 / 評価額 " + Math.round(totalValue) + "円 / 評価損益 " + Math.round(totalPl) + "円 / 実現損益 " + Math.round(realizedPl) + "円";
+    records.forEach(function (r) {
+      const li = document.createElement("li");
+      let sideLabel;
+      if (r.side === "buy") {
+        sideLabel = "買い";
+      } else {
+        sideLabel = "売り";
+      }
+      li.textContent = sideLabel + " " + r.name + " " + r.qty + "株 @" + r.price + "円 ";
+      const delBtn = document.createElement("button");
+      delBtn.textContent = "削除";
+      delBtn.onclick = function () {
+        records = records.filter(function (x) {
+          return x.id !== r.id;
+        });
+        localStorage.setItem("records", JSON.stringify(records));
+        render();
+      };
+
+      li.appendChild(delBtn);
+      list.appendChild(li);
+    });
+  }
+  function calculateHoldings() {
+    const holdings = {};
+    let realizedPl = 0; // 確定した損益の合計
+
+    records.forEach(function (r) {
+      if (!holdings[r.name]) {
+        holdings[r.name] = { qty: 0, cost: 0 };
+      }
+      const h = holdings[r.name];
+
+      if (r.side === "buy") {
+        h.qty += r.qty;
+        h.cost += r.qty * r.price;
+      } else {
+        const avgPrice = h.qty > 0 ? h.cost / h.qty : 0;
+        realizedPl += (r.price - avgPrice) * r.qty;
+        h.qty -= r.qty;
+        h.cost -= avgPrice * r.qty;
+      }
+    });
+
+    return { holdings: holdings, realizedPl: realizedPl };
+  }
+
+  // 「記録する」ボタンを押したとき
+  document.getElementById("add").onclick = function () {
+    records.push({
+    id: Date.now(),
+    side: document.querySelector('input[name="side"]:checked').value,
+    name: document.getElementById("name").value,
+    qty: Number(document.getElementById("qty").value),
+    price: Number(document.getElementById("price").value)
+  });
+    localStorage.setItem("records", JSON.stringify(records)); // 保存
+    render();
+  };
+
+  render(); // ページを開いたときにも表示する
+</script>
+</body>
+</html>
